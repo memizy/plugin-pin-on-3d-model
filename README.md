@@ -73,6 +73,3 @@ Released under the [MIT License](https://www.google.com/search?q=LICENSE). Built
 <div align="center">
 <i>Maintained with ❤️ by the Memizy Team.</i>
 </div>
-
-# 2. Run the development server
-npm run dev
