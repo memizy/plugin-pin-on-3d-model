@@ -55,3 +55,24 @@ npm install
 
 # 2. Run the development server
 npm run dev
+
+```
+
+### Architecture
+
+* Uses the **Base URL + Manifest** architecture.
+* Build the project using `npm run build` to generate the `dist/` folder.
+* Host the `dist/` folder on GitHub Pages or any static hosting service.
+
+---
+
+## ⚖️ License
+
+Released under the [MIT License](https://www.google.com/search?q=LICENSE). Built with `three.js`.
+
+<div align="center">
+<i>Maintained with ❤️ by the Memizy Team.</i>
+</div>
+
+# 2. Run the development server
+npm run dev
