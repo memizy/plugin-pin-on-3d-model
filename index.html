@@ -22,6 +22,32 @@
         *, *::before, *::after { box-sizing: border-box; }
         body { margin: 0; overflow: hidden; background: #1a2535; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #eee; user-select: none; }
 
+        /* ─── URL FORM ─── */
+        #url-form {
+            position: absolute; inset: 0;
+            background: #1a2535;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 200; gap: 20px; padding: 32px;
+        }
+        #url-form.hidden { display: none; }
+        #url-form h2 { margin: 0; font-size: 1.6rem; color: #f1c40f; }
+        #url-form p  { margin: 0; color: #aaa; font-size: 0.95rem; text-align: center; max-width: 480px; line-height: 1.6; }
+        #url-form-inner { display: flex; gap: 10px; width: 100%; max-width: 560px; }
+        #oqse-url-input {
+            flex: 1; padding: 11px 14px;
+            background: #273548; border: 1px solid #344658; border-radius: 8px;
+            color: #eee; font-size: 0.95rem; outline: none;
+        }
+        #oqse-url-input:focus { border-color: #3498db; }
+        #oqse-url-submit {
+            padding: 11px 22px;
+            background: #3498db; border: none; border-radius: 8px;
+            color: #fff; font-size: 0.95rem; font-weight: 700; cursor: pointer;
+            white-space: nowrap; min-width: 44px; min-height: 44px;
+        }
+        #oqse-url-submit:hover { background: #2980b9; }
+        #url-form-error { color: #e74c3c; font-size: 0.85rem; min-height: 1.2em; }
+
         /* ─── NAČÍTÁNÍ ─── */
         #loading {
             position: absolute; inset: 0;
@@ -94,10 +120,21 @@
 </head>
 <body>
 
+<!-- URL FORM (standalone mód) -->
+<div id="url-form">
+    <h2>🦴 Pin na 3D modelu</h2>
+    <p>Zadej URL adresu souboru <code>data.oqse.json</code>.<br>Assety (GLB modely) se načtou relativně k této cestě.</p>
+    <div id="url-form-inner">
+        <input id="oqse-url-input" type="url" placeholder="https://example.com/skull/data.oqse.json" autocomplete="off" />
+        <button id="oqse-url-submit">Načíst →</button>
+    </div>
+    <div id="url-form-error"></div>
+</div>
+
 <!-- NAČÍTÁNÍ -->
-<div id="loading">
+<div id="loading" class="hidden">
     <div class="loader"></div>
-    <div id="loading-text">Inicializuji…</div>
+    <div id="loading-text">Načítám…</div>
 </div>
 
 <!-- HLAVNÍ APP -->
@@ -133,22 +170,55 @@
         version: '1.0.0',
     });
 
-    // ─── MOCK DATA pro standalone dev (načte data.oqse.json lokálně) ─────────
-    fetch('data.oqse.json')
-        .then(r => r.json())
-        .then(oqse => {
-            const items = oqse.items
+    // ─── STANDALONE: URL FORM ──────────────────────────────────────────────
+    // V host módu onInit přijde od hostu a formulář se okamžitě skryje.
+    // V standalone módu uživatel zadá URL k data.oqse.json a assety se
+    // vyřeší relativně k base URL tohoto souboru.
+
+    async function loadOqseFromUrl(rawUrl) {
+        const errEl  = document.getElementById('url-form-error');
+        const btn    = document.getElementById('oqse-url-submit');
+        errEl.textContent = '';
+        btn.disabled = true;
+        btn.textContent = 'Načítám…';
+
+        try {
+            const jsonUrl  = new URL(rawUrl);                  // validuje URL
+            const baseUrl  = jsonUrl.href.replace(/[^/]+$/, ''); // odtrhnout filename
+
+            const resp = await fetch(jsonUrl.href);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const oqse = await resp.json();
+
+            const items = (oqse.items ?? [])
                 .filter(i => i.type === 'pin-on-model')
                 .map(i => {
                     const assetDef = oqse.meta?.assets?.[i.targetAsset];
-                    // _assetUrl je extra pole – v reálném hostu by bylo součástí itemu
-                    return { ...i, _assetUrl: assetDef?.value ?? i.targetAsset };
+                    const relPath  = assetDef?.value ?? i.targetAsset;
+                    // Vyřešit asset URL relativně k base URL JSON souboru
+                    const _assetUrl = new URL(relPath, baseUrl).href;
+                    return { ...i, _assetUrl };
                 });
+
+            if (!items.length) throw new Error('Žádné pin-on-model položky v souboru');
+
             plugin.useMockData(items, { locale: 'cs', theme: 'dark' });
-        })
-        .catch(() => {
-            plugin.useMockData([], { locale: 'cs', theme: 'dark' });
-        });
+            plugin.triggerMock();
+        } catch (e) {
+            errEl.textContent = '❌ ' + e.message;
+            btn.disabled = false;
+            btn.textContent = 'Načíst →';
+        }
+    }
+
+    document.getElementById('oqse-url-submit').addEventListener('click', () => {
+        const url = document.getElementById('oqse-url-input').value.trim();
+        if (!url) { document.getElementById('url-form-error').textContent = '❌ Zadej URL adresu.'; return; }
+        loadOqseFromUrl(url);
+    });
+    document.getElementById('oqse-url-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') document.getElementById('oqse-url-submit').click();
+    });
 
     // ─── THREE.JS SETUP ───────────────────────────────────────────────────────
     const canvasWrap = document.getElementById('canvas-wrap');
@@ -375,6 +445,9 @@
     // ─── SDK CALLBACKS ────────────────────────────────────────────────────────
     plugin
         .onInit(({ items }) => {
+            // Skrýt URL formulář (standalone i host mód)
+            document.getElementById('url-form').classList.add('hidden');
+
             const pinItems = items.filter(i => i.type === 'pin-on-model');
 
             if (!pinItems.length) {
@@ -388,9 +461,10 @@
             quizScore    = 0;
             sessionStart = Date.now();
 
-            // _assetUrl pochází z mock dat; v reálném hostu by byl targetAsset přímá URL
+            // _assetUrl pochází z mock dat (standalone); v host módu je targetAsset přímá URL
             const modelUrl = pinItems[0]._assetUrl ?? pinItems[0].targetAsset;
 
+            document.getElementById('loading').classList.remove('hidden');
             document.getElementById('loading-text').textContent = 'Načítám model…';
 
             loadModel(modelUrl, () => {
