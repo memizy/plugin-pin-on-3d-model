@@ -356,31 +356,6 @@
     }
 
     // ─── SDK CALLBACKS ────────────────────────────────────────────────────────
-    // ─── RESOLVE ASSET URLs ─────────────────────────────────────────────────
-    // V standalone módu SDK předá surové items z OQSE JSONu.
-    // Potřebujeme vyřešit relativní cesty k assetům vůči base URL
-    // zdrojového souboru (?set= parametr nebo URL zadaná v SDK dialogu).
-    function resolveAssetUrl(item) {
-        // Pokud už je _assetUrl nastavena (např. hostem), použít ji
-        if (item._assetUrl) return item._assetUrl;
-
-        const setUrl = new URLSearchParams(window.location.search).get('set');
-        const baseUrl = setUrl ? setUrl.replace(/[^/]+$/, '') : '';
-
-        const assetRef = item.targetAsset;
-        if (!assetRef) return null;
-
-        // Absolutní URL – použít přímo
-        if (/^https?:\/\//.test(assetRef)) return assetRef;
-
-        // Relativní cesta – vyřešit vůči base URL
-        if (baseUrl) {
-            try { return new URL(assetRef, baseUrl).href; }
-            catch { /* fall through */ }
-        }
-        return assetRef;
-    }
-
     plugin
         .onInit(({ items }) => {
             const pinItems = items.filter(i => i.type === 'pin-on-model');
@@ -396,7 +371,14 @@
             quizScore    = 0;
             sessionStart = Date.now();
 
-            const modelUrl = resolveAssetUrl(pinItems[0]);
+            // SDK automaticky resolvuje relativní cesty v item.assets
+            const modelAsset = pinItems[0].assets?.model;
+            const modelUrl   = modelAsset?.value;
+            if (!modelUrl) {
+                plugin.reportError('NO_MODEL', 'Položka nemá asset "model"', { itemId: pinItems[0].id });
+                plugin.complete({ score: null });
+                return;
+            }
 
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('loading-text').textContent = 'Načítám model…';
