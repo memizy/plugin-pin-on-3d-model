@@ -131,6 +131,7 @@
     const plugin = new MemizyPlugin({
         id: 'https://memizy.com/plugins/pin-on-3d-model',
         version: '1.0.0',
+        debug: true,
     });
 
     // ─── THREE.JS SETUP ───────────────────────────────────────────────────────
@@ -358,6 +359,8 @@
     // ─── SDK CALLBACKS ────────────────────────────────────────────────────────
     plugin
         .onInit(({ items, assets }) => {
+            console.log('[plugin] onInit — items:', items.length, 'assets:', Object.keys(assets ?? {}));
+
             const pinItems = items.filter(i => i.type === 'pin-on-model');
 
             if (!pinItems.length) {
@@ -374,7 +377,9 @@
             // OQSE asset fallback: item.assets[key] → payload.assets[key] (meta.assets)
             const assetKey   = pinItems[0].targetAsset;
             const modelAsset = pinItems[0].assets?.[assetKey] ?? assets[assetKey];
+            console.log('[plugin] asset lookup:', assetKey, '→', modelAsset);
             const modelUrl   = modelAsset?.value;
+            console.log('[plugin] modelUrl:', modelUrl);
             if (!modelUrl) {
                 plugin.reportError('NO_MODEL', `Asset "${assetKey}" nenalezen`, { itemId: pinItems[0].id });
                 plugin.complete({ score: null });
