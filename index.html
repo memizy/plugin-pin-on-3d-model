@@ -125,7 +125,7 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { GLTFLoader }    from 'three/addons/loaders/GLTFLoader.js';
     import { DRACOLoader }   from 'three/addons/loaders/DRACOLoader.js';
-    import { MemizyPlugin }  from 'https://cdn.jsdelivr.net/npm/@memizy/plugin-sdk/+esm';
+    import { MemizyPlugin }  from 'https://cdn.jsdelivr.net/npm/@memizy/plugin-sdk@0.2.0/dist/memizy-sdk.js';
 
     // ─── SDK INIT ─────────────────────────────────────────────────────────────
     const plugin = new MemizyPlugin({
@@ -185,7 +185,6 @@
     let quizScore    = 0;
     let quizAnswered = false;
     let sessionStart = 0;
-    let isAborted    = false;
 
     // ─── MATERIAL HELPERS ─────────────────────────────────────────────────────
     function makeCorrectFeedbackMat(mesh) {
@@ -218,7 +217,6 @@
         if (loadedModel) { scene.remove(loadedModel); loadedModel = null; allMeshes = []; }
 
         loader.load(filename, (gltf) => {
-            if (isAborted) return;
             loadedModel = gltf.scene;
 
             // Vycentrování + normalizace scale
@@ -265,7 +263,7 @@
     });
 
     canvasWrap.addEventListener('click', () => {
-        if (!loadedModel || quizAnswered || isAborted) return;
+        if (!loadedModel || quizAnswered) return;
         raycaster.setFromCamera(mouseVec, camera);
         const hits = raycaster.intersectObjects(loadedModel.children, true).filter(h => h.object.isMesh);
         if (hits.length > 0) handleQuizClick(hits[0].object);
@@ -273,7 +271,6 @@
 
     // ─── QUIZ LOGIKA ──────────────────────────────────────────────────────────
     function showQuizQuestion(idx) {
-        if (isAborted) return;
         if (idx >= quizItems.length) { finishSession(); return; }
 
         const item   = quizItems[idx];
@@ -296,7 +293,7 @@
     }
 
     function handleQuizClick(mesh) {
-        if (quizAnswered || isAborted) return;
+        if (quizAnswered) return;
         quizAnswered = true;
 
         const item      = quizItems[quizIndex];
@@ -315,10 +312,8 @@
             });
         }
 
-        // --- SDK: nahlásit odpověď ---
-        plugin
-            .answer(item.id, isCorrect, { answer: mesh.name })
-            .updateProgress(quizIndex + 1, quizItems.length);
+        // --- SDK: nahlásit odpověď (SDK automaticky posílá SYNC_PROGRESS) ---
+        plugin.answer(item.id, isCorrect, { answer: mesh.name });
 
         const expBox = document.getElementById('quiz-explanation');
         expBox.innerHTML     = (isCorrect ? '✅ ' : '❌ Správně: kost je zvýrazněna zeleně. ') + (item.explanation || '');
@@ -336,12 +331,10 @@
     });
 
     function finishSession() {
-        if (isAborted) return;
         document.getElementById('quiz-ui').style.display = 'none';
         resetAllToOriginal();
 
-        const pct         = Math.round((quizScore / quizItems.length) * 100);
-        const totalSpent  = Date.now() - sessionStart;
+        const pct = Math.round((quizScore / quizItems.length) * 100);
 
         // Zobrazit výsledkový overlay
         const overlay = document.createElement('div');
@@ -352,8 +345,8 @@
             <div style="font-size:1.15rem;color:#eee;">Skóre: <strong style="color:#2ecc71">${quizScore}</strong> z ${quizItems.length} &nbsp;(${pct}&nbsp;%)</div>`;
         document.getElementById('canvas-wrap').appendChild(overlay);
 
-        // --- SDK: signalizovat dokončení ---
-        plugin.complete({ score: pct, totalTimeSpent: totalSpent });
+        // --- SDK: signalizovat ukončení ---
+        plugin.exit({ score: pct });
     }
 
     // ─── SDK CALLBACKS ────────────────────────────────────────────────────────
@@ -365,7 +358,7 @@
 
             if (!pinItems.length) {
                 plugin.reportError('NO_ITEMS', 'Žádné pin-on-model položky', { itemId: null, context: null });
-                plugin.complete({ score: null, totalTimeSpent: 0 });
+                plugin.exit({ score: null });
                 return;
             }
 
@@ -382,7 +375,7 @@
             console.log('[plugin] modelUrl:', modelUrl);
             if (!modelUrl) {
                 plugin.reportError('NO_MODEL', `Asset "${assetKey}" nenalezen`, { itemId: pinItems[0].id });
-                plugin.complete({ score: null });
+                plugin.exit({ score: null });
                 return;
             }
 
@@ -394,15 +387,6 @@
                 document.getElementById('app').classList.add('active');
                 showQuizQuestion(0);
             });
-        })
-        .onAborted(() => {
-            isAborted = true;
-            // Zastavit všechny časovače a skrýt UI
-            document.getElementById('loading').classList.add('hidden');
-            document.getElementById('quiz-ui').style.display = 'none';
-        })
-        .onResumed(() => {
-            isAborted = false;
         })
         .onConfigUpdate(({ theme }) => {
             if (theme === 'light') {
