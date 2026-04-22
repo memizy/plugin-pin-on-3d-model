@@ -304,7 +304,7 @@
         document.getElementById('quiz-score-label').textContent  =
             `${idx + 1} / ${quizItems.length}  \u2502  ✓ ${quizScore}`;
 
-        sdk.startItemTimer(item.id);
+        sdk.store.startItemTimer(item.id);
     }
 
     function handleQuizClick(mesh) {
@@ -328,7 +328,7 @@
         }
 
         // --- SDK: nahlásit odpověď (SDK automaticky posílá SYNC_PROGRESS) ---
-        sdk.answer(item.id, isCorrect, { answer: mesh.name });
+        sdk.store.answer(item.id, isCorrect, { answer: mesh.name });
 
         const expBox = document.getElementById('quiz-explanation');
         expBox.innerHTML     = (isCorrect ? '✅ ' : '❌ Správně: kost je zvýrazněna zeleně. ') + (item.explanation || '');
