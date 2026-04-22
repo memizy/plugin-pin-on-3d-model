@@ -19,9 +19,9 @@ A generic, high-performance 3D viewer plugin for the [Memizy Ecosystem](https://
 
 You can test this plugin instantly in the Memizy Plugin Playground.
 
-* 🎮 **[Test with 3D Anatomy Set (Recommended)](https://memizy.github.io/plugin-sdk/?set=https://cdn.jsdelivr.net/gh/memizy/set-anatomie-3d@main/data.oqse.json)**
+* 🎮 **[Test with 3D Anatomy Set (Recommended)](https://memizy.github.io/plugin-pin-on-3d-model/?set=https://cdn.jsdelivr.net/gh/memizy/set-anatomie-3d@main/data.oqse.json)**
 	*Loads the playground pre-configured with a compatible 3D anatomy study set so you can see the plugin in action immediately.*
-* 🧪 **[Open Empty Playground](https://memizy.github.io/plugin-sdk/)**
+* 🧪 **[Open Empty Playground](https://memizy.github.io/plugin-pin-on-3d-model/)**
 	*Loads the empty playground where you can upload your own OQSE JSON files containing 3D models.*
 
 ---
