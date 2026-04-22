@@ -8,12 +8,22 @@
     <!-- OQSE Application Manifest -->
     <script type="application/oqse-manifest+json">
     {
-        "version": "1.0",
+        "$schema": "https://cdn.jsdelivr.net/gh/memizy/oqse-specification@main/schemas/oqse-manifest-v0.1.json",
+        "version": "0.1",
         "id": "https://memizy.com/plugins/pin-on-3d-model",
+        "pluginVersion": "1.0.0",
         "appName": "Pin na 3D modelu",
+        "description": "Interaktivní kvíz pro připínání správných částí na 3D modelu.",
+        "locales": ["cs"],
+        "author": {
+            "name": "Memizy"
+        },
         "capabilities": {
-            "actions": ["quiz"],
-            "types": ["pin-on-model"]
+            "actions": ["render"],
+            "types": ["pin-on-model"],
+            "assets": {
+                "model": ["model/gltf-binary", "model/gltf+json", "*"]
+            }
         }
     }
     </script>
@@ -125,10 +135,10 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { GLTFLoader }    from 'three/addons/loaders/GLTFLoader.js';
     import { DRACOLoader }   from 'three/addons/loaders/DRACOLoader.js';
-    import { MemizyPlugin }  from 'https://cdn.jsdelivr.net/npm/@memizy/plugin-sdk@0.2.0/dist/memizy-sdk.js';
+    import { MemizySDK }     from 'https://cdn.jsdelivr.net/npm/@memizy/plugin-sdk@0.3.0/dist/memizy-sdk.js';
 
     // ─── SDK INIT ─────────────────────────────────────────────────────────────
-    const plugin = new MemizyPlugin({
+    const sdk = new MemizySDK({
         id: 'https://memizy.com/plugins/pin-on-3d-model',
         version: '1.0.0',
         debug: true,
@@ -247,7 +257,8 @@
 
         }, undefined, (err) => {
             console.error(err);
-            plugin.reportError('MODEL_LOAD_FAILED', err.message, { itemId: null, context: { filename } });
+            const errMessage = err?.message ?? 'Unknown model loading error';
+            sdk.sys.reportError('MODEL_LOAD_FAILED', errMessage, { itemId: null, context: { filename } });
             document.getElementById('loading-text').textContent = '❌ Chyba načítání modelu';
         });
     }
@@ -289,7 +300,7 @@
         document.getElementById('quiz-score-label').textContent  =
             `${idx + 1} / ${quizItems.length}  \u2502  ✓ ${quizScore}`;
 
-        plugin.startItemTimer(item.id);
+        sdk.startItemTimer(item.id);
     }
 
     function handleQuizClick(mesh) {
@@ -313,7 +324,7 @@
         }
 
         // --- SDK: nahlásit odpověď (SDK automaticky posílá SYNC_PROGRESS) ---
-        plugin.answer(item.id, isCorrect, { answer: mesh.name });
+        sdk.answer(item.id, isCorrect, { answer: mesh.name });
 
         const expBox = document.getElementById('quiz-explanation');
         expBox.innerHTML     = (isCorrect ? '✅ ' : '❌ Správně: kost je zvýrazněna zeleně. ') + (item.explanation || '');
@@ -346,19 +357,48 @@
         document.getElementById('canvas-wrap').appendChild(overlay);
 
         // --- SDK: signalizovat ukončení ---
-        plugin.exit({ score: pct });
+        sdk.sys.exit({ score: pct });
     }
 
     // ─── SDK CALLBACKS ────────────────────────────────────────────────────────
-    plugin
-        .onInit(({ items, assets }) => {
-            console.log('[plugin] onInit — items:', items.length, 'assets:', Object.keys(assets ?? {}));
+    sdk.onConfigUpdate((config) => {
+        if (config.theme === 'light') {
+            scene.background = new THREE.Color(0xf0f4f8);
+            document.body.style.background = '#f0f4f8';
+        } else {
+            scene.background = new THREE.Color(0x1a2535);
+            document.body.style.background = '#1a2535';
+        }
+    });
+
+    async function bootstrap() {
+        try {
+            const session = await sdk.connect();
+            const rawItems = sdk.store.getItems();
+            const items    = Array.isArray(rawItems) ? rawItems : [];
+            const assets  = session?.assets ?? {};
+
+            console.log('[plugin] connect — items:', items.length, 'assets:', Object.keys(assets ?? {}));
+
+            if (items.length === 0) {
+                sdk.sys.reportError('NO_ITEMS', 'Žádné položky k vykreslení', { itemId: null, context: null });
+                sdk.sys.exit({ score: null });
+                return;
+            }
+
+            if (items[0].type !== 'pin-on-model') {
+                sdk.sys.reportError('INVALID_ITEM_TYPE', `První položka není typu pin-on-model: ${items[0].type}`, {
+                    itemId: items[0].id ?? null,
+                    context: { expectedType: 'pin-on-model', actualType: items[0].type }
+                });
+                sdk.sys.exit({ score: null });
+                return;
+            }
 
             const pinItems = items.filter(i => i.type === 'pin-on-model');
-
             if (!pinItems.length) {
-                plugin.reportError('NO_ITEMS', 'Žádné pin-on-model položky', { itemId: null, context: null });
-                plugin.exit({ score: null });
+                sdk.sys.reportError('NO_PIN_ITEMS', 'Žádné pin-on-model položky', { itemId: null, context: null });
+                sdk.sys.exit({ score: null });
                 return;
             }
 
@@ -367,15 +407,20 @@
             quizScore    = 0;
             sessionStart = Date.now();
 
-            // OQSE asset fallback: item.assets[key] → payload.assets[key] (meta.assets)
+            // OQSE asset fallback: item.assets[key] → session.assets[key]
             const assetKey   = pinItems[0].targetAsset;
-            const modelAsset = pinItems[0].assets?.[assetKey] ?? assets[assetKey];
+            const modelAsset = pinItems[0].assets?.[assetKey] ?? assets?.[assetKey];
+            const modelUrl   = typeof modelAsset?.value === 'string' ? modelAsset.value : null;
+
             console.log('[plugin] asset lookup:', assetKey, '→', modelAsset);
-            const modelUrl   = modelAsset?.value;
             console.log('[plugin] modelUrl:', modelUrl);
+
             if (!modelUrl) {
-                plugin.reportError('NO_MODEL', `Asset "${assetKey}" nenalezen`, { itemId: pinItems[0].id });
-                plugin.exit({ score: null });
+                sdk.sys.reportError('NO_MODEL', `Asset "${assetKey}" nenalezen nebo neobsahuje platné MediaObject.value`, {
+                    itemId: pinItems[0].id,
+                    context: { assetKey }
+                });
+                sdk.sys.exit({ score: null });
                 return;
             }
 
@@ -387,16 +432,15 @@
                 document.getElementById('app').classList.add('active');
                 showQuizQuestion(0);
             });
-        })
-        .onConfigUpdate(({ theme }) => {
-            if (theme === 'light') {
-                scene.background = new THREE.Color(0xf0f4f8);
-                document.body.style.background = '#f0f4f8';
-            } else {
-                scene.background = new THREE.Color(0x1a2535);
-                document.body.style.background = '#1a2535';
-            }
-        });
+        } catch (err) {
+            console.error(err);
+            const errMessage = err?.message ?? 'Unknown SDK connection error';
+            sdk.sys.reportError('SDK_CONNECT_FAILED', errMessage, { itemId: null, context: null });
+            sdk.sys.exit({ score: null });
+        }
+    }
+
+    bootstrap();
 
 </script>
 </body>
