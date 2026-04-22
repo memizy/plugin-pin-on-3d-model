@@ -58,7 +58,7 @@ This plugin declares the following capabilities via an **HTML Data Island** mani
 
 ## 🛠️ Development Setup
 
-This plugin is built as a lightweight, independent Vanilla JavaScript application using `three.js` via CDN.
+This plugin is built as a lightweight, independent Vanilla JavaScript / Three.js via CDN application.
 
 ```bash
 # 1. Serve the plugin folder locally
