@@ -15,6 +15,17 @@ A generic, high-performance 3D viewer plugin for the [Memizy Ecosystem](https://
 
 ---
 
+## 🚀 Live Demo
+
+You can test this plugin instantly in the Memizy Plugin Playground.
+
+* 🎮 **[Test with 3D Anatomy Set (Recommended) ↗](https://memizy.github.io/plugin-sdk/?set=https://cdn.jsdelivr.net/gh/memizy/set-anatomie-3d@main/data.oqse.json)**
+	*Loads the playground pre-configured with a compatible 3D anatomy study set so you can see the plugin in action immediately.*
+* 🧪 **[Open Empty Playground ↗](https://memizy.github.io/plugin-sdk/)**
+	*Loads the empty playground where you can upload your own OQSE JSON files containing 3D models.*
+
+---
+
 ## 💡 What it does
 
 Instead of traditional text-based multiple-choice questions, this plugin handles the OQSE **`pin-on-model`** item type. 
@@ -32,37 +43,33 @@ It receives a question and a 3D model asset from the Memizy host application. Th
 
 ## 🧩 OQSE Integration
 
-This plugin declares the following capabilities in its `oqse-manifest.json`:
+This plugin declares the following capabilities via an **HTML Data Island** manifest embedded directly in its `index.html`:
 * **Types supported:** `pin-on-model`
 * **Actions:** `render`
 
 ### How it works under the hood:
-1. The Memizy app sends the `pin-on-model` item data via the `window.postMessage` SDK.
+1. The Memizy app sends the `pin-on-model` item data via the `@memizy/plugin-sdk` v0.3.0 (using Penpal RPC).
 2. The plugin reads the `targetAsset` field and dynamically loads the `.glb` file.
 3. It sets up a `THREE.Raycaster` to detect user clicks.
 4. It compares the clicked mesh's name with the `targetName` defined in the item's `hotspots` array.
-5. It returns the score (1.0 for correct, 0.0 for incorrect) back to the host app.
+5. It returns the score (100 for correct, 0 for incorrect) back to the host app.
 
 ---
 
 ## 🛠️ Development Setup
 
-This plugin is built as an independent Vue 3 / Vite application using `three.js`.
+This plugin is built as a lightweight, independent Vanilla JavaScript application using `three.js` via CDN.
 
 ```bash
-# 1. Install dependencies
-npm install
-
-# 2. Run the development server
-npm run dev
+# 1. Serve the plugin folder locally
+python -m http.server 8080
 
 ```
 
 ### Architecture
 
 * Uses the **Base URL + Manifest** architecture.
-* Build the project using `npm run build` to generate the `dist/` folder.
-* Host the `dist/` folder on GitHub Pages or any static hosting service.
+* To deploy, just host the `index.html` and any static assets on any static web server (like GitHub Pages, Vercel, or Netlify).
 
 ---
 
